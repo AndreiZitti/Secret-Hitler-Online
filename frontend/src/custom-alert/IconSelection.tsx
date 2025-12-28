@@ -9,6 +9,7 @@ import portraits, {
 import { portraitsAltText } from "../assets";
 
 import ButtonPrompt from "./ButtonPrompt";
+import CameraCapture from "./CameraCapture";
 import { SendWSCommand, WSCommandType } from "../types";
 
 type IconSelectionProps = {
@@ -20,15 +21,24 @@ type IconSelectionProps = {
   onClickTweet: () => void; // Kept for compatibility, but unused
 };
 
-type IconSelectionState = Record<string, never>;
+type IconSelectionState = {
+  showCamera: boolean;
+};
 
 class IconSelection extends Component<IconSelectionProps, IconSelectionState> {
   constructor(props: IconSelectionProps) {
     super(props);
 
+    this.state = {
+      showCamera: false,
+    };
+
     this.onConfirmButtonClick = this.onConfirmButtonClick.bind(this);
     this.getIconButtonHML = this.getIconButtonHML.bind(this);
     this.isIconInUse = this.isIconInUse.bind(this);
+    this.onTakePhotoClick = this.onTakePhotoClick.bind(this);
+    this.onCameraCapture = this.onCameraCapture.bind(this);
+    this.onCameraCancel = this.onCameraCancel.bind(this);
   }
 
   isIconInUse(iconID: string) {
@@ -55,6 +65,23 @@ class IconSelection extends Component<IconSelectionProps, IconSelectionState> {
         icon: iconID,
       });
     }
+  }
+
+  onTakePhotoClick() {
+    this.setState({ showCamera: true });
+  }
+
+  onCameraCapture(imageDataUrl: string) {
+    // Send the captured photo as the icon
+    this.props.sendWSCommand({
+      command: WSCommandType.SELECT_ICON,
+      icon: imageDataUrl,
+    });
+    this.setState({ showCamera: false });
+  }
+
+  onCameraCancel() {
+    this.setState({ showCamera: false });
   }
 
   /**
@@ -110,23 +137,49 @@ class IconSelection extends Component<IconSelectionProps, IconSelectionState> {
   render() {
     // Show all portraits (unlocked + locked) since Twitter unlock is removed
     const allPortraits = unlockedPortraits.concat(lockedPortraits);
+    const currPortrait = this.props.playerToIcon[this.props.user];
+    const hasCustomPhoto = currPortrait && currPortrait.startsWith("data:image");
 
     return (
-      <ButtonPrompt
-        label={"PLAYER LOOK"}
-        renderHeader={() => {
-          return (
-            <>
-              <p>Choose a look, then press confirm.</p>
-              {this.getIconButtonHML(allPortraits)}
-            </>
-          );
-        }}
-        buttonDisabled={
-          this.props.playerToIcon[this.props.user] === defaultPortrait
-        }
-        buttonOnClick={this.onConfirmButtonClick}
-      ></ButtonPrompt>
+      <>
+        {this.state.showCamera && (
+          <CameraCapture
+            onCapture={this.onCameraCapture}
+            onCancel={this.onCameraCancel}
+          />
+        )}
+        <ButtonPrompt
+          label={"PLAYER LOOK"}
+          renderHeader={() => {
+            return (
+              <>
+                <p>Choose a look or take a photo, then press confirm.</p>
+                <div id="take-photo-container">
+                  <button
+                    id="take-photo-btn"
+                    onClick={this.onTakePhotoClick}
+                    className={hasCustomPhoto ? "selected" : ""}
+                  >
+                    Take Photo
+                  </button>
+                  {hasCustomPhoto && (
+                    <img
+                      src={currPortrait}
+                      alt="Your photo"
+                      className="custom-photo-preview"
+                    />
+                  )}
+                </div>
+                {this.getIconButtonHML(allPortraits)}
+              </>
+            );
+          }}
+          buttonDisabled={
+            this.props.playerToIcon[this.props.user] === defaultPortrait
+          }
+          buttonOnClick={this.onConfirmButtonClick}
+        ></ButtonPrompt>
+      </>
     );
   }
 }

@@ -174,8 +174,8 @@ class Player extends Component {
                 />
 
                 <img id={"player-icon"}
-                     alt={portraitsAltText[this.props.icon]}
-                     src={portraits[this.props.icon]}
+                     alt={this.props.icon && this.props.icon.startsWith("data:image") ? "Custom photo" : portraitsAltText[this.props.icon]}
+                     src={this.props.icon && this.props.icon.startsWith("data:image") ? this.props.icon : portraits[this.props.icon]}
                      className={this.getClassName()}
                 />
 

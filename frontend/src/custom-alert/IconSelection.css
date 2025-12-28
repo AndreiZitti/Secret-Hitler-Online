@@ -61,3 +61,45 @@
 #twitter-icon {
     height: calc(30px + 0.6vmin);
 }
+
+#take-photo-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+#take-photo-btn {
+    background: var(--buttonAltFill);
+    box-shadow: 0 5px 0 var(--buttonAltShadowFill);
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    font-size: calc(12px + 0.5vmin);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+#take-photo-btn:hover {
+    background: var(--buttonAltHoverFill);
+}
+
+#take-photo-btn:active {
+    transform: translateY(5px);
+    box-shadow: 0 0 0 var(--buttonAltShadowFill);
+}
+
+#take-photo-btn.selected {
+    background: var(--selectHoverFill);
+    box-shadow: 0 5px 0 var(--selectColor);
+}
+
+.custom-photo-preview {
+    width: 50px;
+    height: 50px;
+    border-radius: 8%;
+    object-fit: cover;
+    border: 2px solid var(--selectColor);
+}
