@@ -463,7 +463,6 @@ public class Lobby implements Serializable {
         }
 
         Collections.shuffle(playerNames);
-
         game = new SecretHitlerGame(playerNames);
     }
 

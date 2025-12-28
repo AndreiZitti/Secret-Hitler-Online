@@ -125,6 +125,7 @@ public class SecretHitlerServer {
             config.plugins.enableCors(cors -> {
                 cors.add(it -> {
                     it.allowHost("https://games.zitti.ro");
+                    it.allowHost("https://secret-hitler.games.zitti.ro");
                     it.allowHost("http://localhost:3000");
                 });
             });

@@ -1,0 +1,14 @@
+# Caddy configuration for Secret Hitler backend
+# Copy this to your Hetzner server's Caddy config
+
+game-api.zitti.ro {
+    # Reverse proxy to Java backend
+    reverse_proxy localhost:4040
+
+    # Enable WebSocket support
+    @websocket {
+        header Connection *Upgrade*
+        header Upgrade websocket
+    }
+    reverse_proxy @websocket localhost:4040
+}
