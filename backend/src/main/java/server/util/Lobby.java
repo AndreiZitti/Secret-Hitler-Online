@@ -1,7 +1,5 @@
 package server.util;
 
-import game.CpuPlayer;
-import game.GameState;
 import game.SecretHitlerGame;
 import io.javalin.websocket.WsContext;
 import org.json.JSONObject;
@@ -37,21 +35,17 @@ public class Lobby implements Serializable {
     final private Set<String> usersInGame;
     final private ConcurrentHashMap<String, String> usernameToIcon;
 
-    private Set<CpuPlayer> cpuPlayers;
-
     /* Used to reassign users to previously chosen images if they disconnect */
     final private ConcurrentHashMap<String, String> usernameToPreferredIcon;
 
     public static long LOBBY_TIMEOUT_DURATION_IN_MIN = 10;
     public static float PLAYER_TIMEOUT_IN_SEC = 3;
-    public static float CPU_ACTION_DELAY_IN_SEC = 4;
     private long timeout;
 
     private static Logger logger = LoggerFactory.getLogger(Lobby.class);
 
     private static int MAX_TIMER_SCHEDULING_ATTEMPTS = 2;
     transient private Timer userTimeoutTimer = new Timer();
-    transient private Timer cpuTickTimer = new Timer();
 
     static String DEFAULT_ICON = "p_default";
 
@@ -64,7 +58,6 @@ public class Lobby implements Serializable {
         usersInGame = new ConcurrentSkipListSet<>();
         usernameToIcon = new ConcurrentHashMap<>();
         usernameToPreferredIcon = new ConcurrentHashMap<>();
-        cpuPlayers = new ConcurrentSkipListSet<>();
         resetTimeout();
     }
 
@@ -108,6 +101,19 @@ public class Lobby implements Serializable {
         } else {
             return new ArrayList<String>(userToUsername.values());
         }
+    }
+
+    /**
+     * Returns whether the given username is the VIP (first player in the lobby).
+     *
+     * @param username the username to check.
+     * @return true iff the username is the VIP of this lobby.
+     */
+    synchronized public boolean isVIP(String username) {
+        if (activeUsernames.isEmpty()) {
+            return false;
+        }
+        return activeUsernames.peek().equals(username);
     }
 
     /////// User Management
@@ -301,12 +307,11 @@ public class Lobby implements Serializable {
 
     /**
      * Sends a message to every connected user with the current game state.
-     * 
+     *
      * @effects a message containing a JSONObject representing the state of the
      *          SecretHitlerGame is sent
      *          to each connected WsContext.
-     *          ({@code GameToJSONConverter.convert()}). Also
-     *          updates all connected CpuPlayers after a set amount of time.
+     *          ({@code GameToJSONConverter.convert()}).
      */
     synchronized public void updateAllUsers() {
         for (Entry<WsContext, String> entry : userToUsername.entrySet()) {
@@ -316,62 +321,6 @@ public class Lobby implements Serializable {
         // Check if the game ended.
         if (game != null && game.hasGameFinished()) {
             game = null;
-            cpuPlayers.clear();
-        }
-
-        // Update all the CpuPlayers so they can act
-        boolean didCpuUpdateState = false;
-        if (isInGame()) {
-            // Update all CPUs before allowing them to start acting
-            for (CpuPlayer cpu : cpuPlayers) {
-                cpu.update(game);
-            }
-            for (CpuPlayer cpu : cpuPlayers) {
-                if (game.getState() == GameState.CHANCELLOR_VOTING) {
-                    // We're in a voting step, so it doesn't matter if the CPU is
-                    // acting unless the gamestate changes.
-                    boolean stateUpdated = cpu.act(game);
-                    // Did acting cause voting to end?
-                    if (stateUpdated && game.getState() != GameState.CHANCELLOR_VOTING) {
-                        didCpuUpdateState = true;
-                        break;
-                    }
-                } else {
-                    if (cpu.act(game)) {
-                        didCpuUpdateState = true;
-                        break;
-                    }
-                }
-            }
-        }
-
-        if (didCpuUpdateState) {
-            int delay_in_ms = (int) (CPU_ACTION_DELAY_IN_SEC * 1000);
-            int timerSchedulingAttempts = 0;
-            // Make multiple attempts to schedule the timer.
-            while (timerSchedulingAttempts < MAX_TIMER_SCHEDULING_ATTEMPTS) {
-                try {
-                    cpuTickTimer.schedule(new updateUsersTask(), delay_in_ms);
-                    break;
-                } catch (IllegalStateException e) {
-                    // Timer hit an error state and must be reset.
-                    cpuTickTimer.cancel();
-                    cpuTickTimer = new Timer();
-                    timerSchedulingAttempts++;
-                }
-            }
-            if (timerSchedulingAttempts == MAX_TIMER_SCHEDULING_ATTEMPTS) {
-                logger.error("Failed to schedule timer for CPU ticks.");
-            }
-        }
-    }
-
-    /**
-     * Small helper class for removing users from the active users queue.
-     */
-    class updateUsersTask extends TimerTask {
-        public void run() {
-            updateAllUsers();
         }
     }
 
@@ -415,7 +364,6 @@ public class Lobby implements Serializable {
         userToUsername = new ConcurrentHashMap<>();
         activeUsernames = new ConcurrentLinkedQueue<>();
         userTimeoutTimer = new Timer();
-        cpuTickTimer = new Timer();
     }
 
     /**
@@ -465,7 +413,7 @@ public class Lobby implements Serializable {
 
     /**
      * Starts a new SecretHitlerGame with the connected users as players.
-     * 
+     *
      * @throws RuntimeException if there are an insufficient number of players to
      *                          start a game, if there are too
      *                          many in the lobby, or if the lobby is in a game
@@ -484,7 +432,7 @@ public class Lobby implements Serializable {
             throw new RuntimeException("Cannot start a new game while a game is in progress.");
         }
 
-        // Check that all players have (non-default) icons set.
+        // Check that all real players have (non-default) icons set.
         for (String username : activeUsernames) {
             if (usernameToIcon.get(username).equals(DEFAULT_ICON)) {
                 throw new RuntimeException("Not all players have selected icons.");
@@ -494,34 +442,29 @@ public class Lobby implements Serializable {
         usersInGame.clear();
         usersInGame.addAll(userToUsername.values());
 
-        // Generate CpuPlayers if the lobby size has not been met
-        List<String> cpuNames = new ArrayList<>();
-        cpuPlayers.clear();
-        if (usersInGame.size() < SecretHitlerGame.MIN_PLAYERS) {
-            int numCpuPlayersToGenerate = SecretHitlerGame.MIN_PLAYERS - usersInGame.size();
-            int i = 1;
-            while (numCpuPlayersToGenerate > 0) {
-                String botName = "Bot " + i;
-                if (!userToUsername.containsValue(botName)) {
-                    cpuNames.add(botName);
-                    cpuPlayers.add(new CpuPlayer(botName));
-                    numCpuPlayersToGenerate--;
-                }
-                i++;
-            }
-        }
-
         // Initialize the new game
         List<String> playerNames = new ArrayList<>(activeUsernames);
-        playerNames.addAll(cpuNames);
+
+        // Add bot players if we don't have enough real players
+        String[] botIcons = {"p_agent", "p_alien", "p_astronaut", "p_clown", "p_cowboy",
+                             "p_devil", "p_diver", "p_doctor", "p_firefighter", "p_ghost"};
+        int botNumber = 1;
+        while (playerNames.size() < SecretHitlerGame.MIN_PLAYERS) {
+            String botName = "Bot" + botNumber;
+            playerNames.add(botName);
+            // Assign an icon to the bot
+            if (botNumber <= botIcons.length) {
+                usernameToIcon.put(botName, botIcons[botNumber - 1]);
+            } else {
+                usernameToIcon.put(botName, DEFAULT_ICON);
+            }
+            usersInGame.add(botName);
+            botNumber++;
+        }
+
         Collections.shuffle(playerNames);
 
         game = new SecretHitlerGame(playerNames);
-
-        // Initialize all of the CpuPlayers
-        for (CpuPlayer cpu : cpuPlayers) {
-            cpu.initialize(game);
-        }
     }
 
     /**

@@ -72,6 +72,7 @@ public class SecretHitlerServer {
     public static final String COMMAND_REGISTER_PEEK = "register-peek";
 
     public static final String COMMAND_END_TERM = "end-term";
+    public static final String COMMAND_END_DISCUSSION = "end-discussion";
 
     private static final String CODE_CHARACTERS = "ABCDEFGHIJKLMNOPQRSTWXYZ"; // u,v characters can look ambiguous
     private static final int CODE_LENGTH = 4;
@@ -122,15 +123,10 @@ public class SecretHitlerServer {
         // Only initialize Javalin communication after the database has been queried.
         Javalin serverApp = Javalin.create(config -> {
             config.plugins.enableCors(cors -> {
-                if (ApplicationConfig.DEBUG) {
-                    cors.add(it -> {
-                        it.anyHost();
-                    });
-                } else {
-                    cors.add(it -> {
-                        it.allowHost("https://secret-hitler.online");
-                    });
-                }
+                cors.add(it -> {
+                    it.allowHost("https://games.zitti.ro");
+                    it.allowHost("http://localhost:3000");
+                });
             });
         }).start(getHerokuAssignedPort());
 
@@ -690,6 +686,11 @@ public class SecretHitlerServer {
                         lobby.game().endPresidentialTerm();
                         break;
 
+                    case COMMAND_END_DISCUSSION:
+                        verifyIsVIP(name, lobby);
+                        lobby.game().endDiscussion();
+                        break;
+
                     case COMMAND_SELECT_ICON:
                         String iconId = message.getString(PARAM_ICON);
                         lobby.trySetUserIcon(iconId, ctx);
@@ -740,7 +741,7 @@ public class SecretHitlerServer {
 
     /**
      * Verifies that the user is the chancellor.
-     * 
+     *
      * @param name  String name of the user.
      * @param lobby the Lobby that the game is in.
      * @throws RuntimeException if the user is not the chancellor.
@@ -748,6 +749,19 @@ public class SecretHitlerServer {
     private static void verifyIsChancellor(String name, Lobby lobby) {
         if (!lobby.game().getCurrentChancellor().equals(name)) {
             throw new RuntimeException("The player '" + name + "' is not currently chancellor.");
+        }
+    }
+
+    /**
+     * Verifies that the user is the VIP (first player to join the lobby).
+     *
+     * @param name  String name of the user.
+     * @param lobby the Lobby that the game is in.
+     * @throws RuntimeException if the user is not the VIP.
+     */
+    private static void verifyIsVIP(String name, Lobby lobby) {
+        if (!lobby.isVIP(name)) {
+            throw new RuntimeException("The player '" + name + "' is not the VIP.");
         }
     }
 

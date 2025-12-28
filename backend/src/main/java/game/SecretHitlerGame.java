@@ -579,10 +579,10 @@ public class SecretHitlerGame implements Serializable {
 
     /**
      * Called to end the current's president term.
-     * 
+     *
      * @throws IllegalStateException if the state is not {@code POST_LEGISLATIVE}.
      * @modifies this
-     * @effects advances the state to {@code CHANCELLOR_NOMINATION} and updates the
+     * @effects advances the state to {@code DISCUSSION} and updates the
      *          current president.
      *          If the PRESIDENTIAL_POWER_ELECTION power was activated, sets the
      *          next president to the elected.
@@ -616,8 +616,23 @@ public class SecretHitlerGame implements Serializable {
         }
         currentChancellor = null;
         this.lastState = this.state;
-        this.state = GameState.CHANCELLOR_NOMINATION;
+        this.state = GameState.DISCUSSION;
         this.round++;
+    }
+
+    /**
+     * Called to end the discussion phase and start the next round.
+     *
+     * @throws IllegalStateException if the state is not {@code DISCUSSION}.
+     * @modifies this
+     * @effects advances the state to {@code CHANCELLOR_NOMINATION}.
+     */
+    public void endDiscussion() {
+        if (this.state != GameState.DISCUSSION) {
+            throw new IllegalStateException("Cannot end discussion when not in discussion phase.");
+        }
+        this.lastState = this.state;
+        this.state = GameState.CHANCELLOR_NOMINATION;
     }
 
     /**
